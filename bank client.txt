@@ -1,0 +1,426 @@
+package com.bankclient.controller;
+
+import java.util.Date;
+
+import javax.servlet.http.HttpSession;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.client.RestTemplate;
+
+import com.bankclient.models.Account;
+import com.bankclient.models.AccountDTO;
+import com.bankclient.models.ApplicationUser;
+import com.bankclient.models.Customer;
+import com.bankclient.models.CustomerDTO;
+import com.bankclient.models.Transaction;
+import com.bankclient.models.TransactionDTO;
+
+@Controller
+public class ClientController {
+
+	@Autowired
+	private RestTemplate restTemplate;
+
+	@GetMapping("/")
+	public String home() {
+		return "home";
+	}
+
+	@GetMapping("/register")
+	public String showRegisterPage() {
+		return "register";
+	}
+
+	@PostMapping("/register")
+	public String registerUser(@RequestParam("username") String username, @RequestParam("password") String password,
+			Model model) {
+		ApplicationUser user = new ApplicationUser();
+		user.setUsername(username);
+		user.setPassword(password);
+		ResponseEntity<String> registrationResponse = restTemplate
+				.postForEntity("http://localhost:8090/authservice/register", user, String.class);
+
+		if (registrationResponse.getStatusCode().is2xxSuccessful()) {
+			return "redirect:/userlogin";
+
+		} else {
+			model.addAttribute("message", "Registration failed. Please try again.");
+			return "register";
+		}
+	}
+
+	@GetMapping("/userlogin")
+	public String showLoginPage() {
+		return "login";
+	}
+
+	@PostMapping("/userlogin")
+	public String userLogin(@RequestParam("username") String username, @RequestParam("password") String password,
+			Model model, HttpSession session) {
+		System.out.println(username);
+		System.out.println(password);
+		ApplicationUser user = new ApplicationUser();
+
+		user.setUsername(username);
+		user.setPassword(password);
+		int status;
+		try {
+
+			ResponseEntity<ApplicationUser> res = restTemplate.postForEntity("http://localhost:8090/authservice/auth",
+					user, ApplicationUser.class);
+			ApplicationUser userObj = (ApplicationUser) res.getBody();
+			System.out.println(userObj);
+			session.setAttribute("userId", userObj.getUserId());
+			status = res.getStatusCodeValue();
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getall";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "login";
+		}
+	}
+
+	// *****************************************************************************
+	@GetMapping("/getall")
+	public String getAllcustomer(HttpSession session) {
+		CustomerDTO dto = restTemplate.getForObject("http://localhost:8092/customerService/getall", CustomerDTO.class);
+		session.setAttribute("CustomerList", dto.getList());
+		return "customerList";
+	}
+
+	@GetMapping("/deleteCustomer/{cusid}")
+	public String deleteCustomer(@PathVariable("cusid") int cusId) {
+		restTemplate.delete("http://localhost:8092/customerService/deleteCustomer/" + cusId);
+		return "redirect:/getall";
+	}
+
+	@GetMapping("/createCustomer")
+	public String showCreateCustomerPage(Model model) {
+		model.addAttribute("customer", new Customer());
+		return "createCustomer";
+	}
+
+	@PostMapping("/createCustomer")
+	public String createCustomer(@RequestParam("cusName") String cusName, @RequestParam("cusEmail") String cusEmail,
+			@RequestParam("cusMob") long cusMob, @RequestParam("cusAadhar") long cusAadhar,
+			@RequestParam("cusPrmaAdd") String cusPrmaAdd, @RequestParam("cusResiAdd") String cusResiAdd,
+			@RequestParam("cusDob") String cusDob, @RequestParam("occupationalDetails") String occupationalDetails, Model model, HttpSession session) {
+
+		Customer cust = new Customer();
+
+		cust.setCusId(0);
+		cust.setCusName(cusName);
+		cust.setCusDob(cusDob);
+		cust.setCusMob(cusMob);
+		cust.setCusEmail(cusEmail);
+		cust.setCusAadhar(cusAadhar);
+		cust.setCusPrmaAdd(cusPrmaAdd);
+		cust.setCusResiAdd(cusResiAdd);
+		cust.setOccupationalDetails(occupationalDetails);
+		int status;
+		try {
+
+			ResponseEntity<Customer> res = restTemplate
+					.postForEntity("http://localhost:8092/customerService/createCustomer", cust, Customer.class);
+			Customer customer = (Customer) res.getBody();
+			System.out.println(customer);
+			;
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getall";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "home";
+		}
+
+	}
+
+	@GetMapping("/updateCustomer/{cusId}")
+	public String showUpdateCustomerForm(@PathVariable("cusId") int cusId, HttpSession session) {
+		ResponseEntity<Customer> responseEntity = restTemplate
+				.getForEntity("http://localhost:8092/customerService/getbyid/" + cusId, Customer.class);
+		Customer customer = responseEntity.getBody();
+		session.setAttribute("customer", customer);
+		return "updateCustomer";
+	}
+
+    @PostMapping("/updateCustomer")
+    public String updateCustomer(@RequestParam("cusid") int cusId,
+                                 @RequestParam("cusName") String cusName,
+                                 @RequestParam("cusEmail") String cusEmail,
+                                 @RequestParam("cusMob") long cusMob,
+                                 @RequestParam("cusAadhar") long cusAadhar,
+                                 @RequestParam("cusPrmaAdd") String cusPrmaAdd,
+                                 @RequestParam("cusResiAdd") String cusResiAdd,
+                                 @RequestParam("cusDob") String cusDob,
+                                 @RequestParam("occupationalDetails") String occupationalDetails,
+                                 Model model) {
+
+        Customer updatedCustomer = new Customer();
+        updatedCustomer.setCusId(cusId);
+        updatedCustomer.setCusName(cusName);
+        updatedCustomer.setCusDob(cusDob);
+        updatedCustomer.setCusMob(cusMob);
+        updatedCustomer.setCusEmail(cusEmail);
+        updatedCustomer.setCusAadhar(cusAadhar);
+        updatedCustomer.setCusPrmaAdd(cusPrmaAdd);
+        updatedCustomer.setCusResiAdd(cusResiAdd);
+        updatedCustomer.setOccupationalDetails(occupationalDetails);
+
+        try {
+            restTemplate.put("http://localhost:8092/customerService/updateCustomer", updatedCustomer);
+            return "redirect:/getall";
+        } catch (Exception e) {
+            model.addAttribute("error", "Error updating customer: " + e.getMessage());
+            return "error";
+        }
+    }
+	// ***********************************************************************************
+
+	@GetMapping("/getAccountlist")
+	public String getAccountList(HttpSession session) {
+		AccountDTO dto = restTemplate.getForObject("http://localhost:8094/accountService/getAccountlist",
+				AccountDTO.class);
+		session.setAttribute("AccountList", dto.getList());
+		return "accountList";
+	}
+
+	@GetMapping("/createAccount")
+	public String showCreateAccountPage(Model model) {
+		model.addAttribute("account", new Account());
+		return "createAccount";
+	}
+
+	@PostMapping("/createAccount")
+	public String createAccount(@RequestParam("accBalance") double accBalance,
+			@RequestParam("accBranch") String accBranch, @RequestParam("accOpenDate") String accOpenDate,
+			@RequestParam("accType") String accType, Model model, HttpSession session) {
+
+		Account acc = new Account();
+
+		acc.setAccNumber(0);
+		acc.setAccBalance(accBalance);
+		acc.setAccBranch(accBranch);
+		acc.setAccOpenDate(accOpenDate);
+		acc.setAccType(accType);
+		int status;
+		try {
+
+			ResponseEntity<Account> res = restTemplate
+					.postForEntity("http://localhost:8094/accountService/createAccount", acc, Account.class);
+			Account account = (Account) res.getBody();
+			System.out.println(account);
+			;
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getAccountlist";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "home";
+		}
+
+	}
+
+	@PostMapping("/updateAccount")
+	public String updateAccount(@RequestParam("accNumber") long accNumber,
+			@RequestParam("accBalance") double accBalance, @RequestParam("accBranch") String accBranch,
+			@RequestParam("accOpenDate") String accOpenDate, @RequestParam("accType") String accType, Model model,
+			HttpSession session) {
+
+		Account acc = new Account();
+
+		acc.setAccNumber(accNumber);
+		acc.setAccBalance(accBalance);
+		acc.setAccBranch(accBranch);
+		acc.setAccOpenDate(accOpenDate);
+		acc.setAccType(accType);
+		int status;
+		try {
+
+			ResponseEntity<Account> res = restTemplate
+					.postForEntity("http://localhost:8094/accountService/updateAccount", acc, Account.class);
+			Account account = (Account) res.getBody();
+			System.out.println(account);
+			;
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getAccountlist";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "home";
+		}
+
+	}
+
+	@GetMapping("/deleteAccount/{accnum}")
+	public String deleteAccount(@PathVariable("accnum") long accNumber) {
+		restTemplate.delete("http://localhost:8094/accountService/deleteAccount/" + accNumber);
+		return "redirect:/getAccountlist";
+	}
+
+	@GetMapping("/deposit")
+	public String depositAccount(@RequestParam("accnum") long accNumber, @RequestParam("amount") double amount,
+			Model model, HttpSession session) {
+
+		restTemplate.getForObject("http://localhost:8094/accountService/deposit/" + accNumber + "/" + amount,
+				Account.class);
+
+		Transaction transaction = new Transaction();
+		transaction.setTranAmount(amount);
+		transaction.setTranType("Deposit");
+		transaction.setTranToAccount(accNumber);
+		transaction.setTranFromAccount(accNumber);
+
+		ResponseEntity<Transaction> res = restTemplate.postForEntity(
+				"http://localhost:8096/transactionService/createTransaction", transaction, Transaction.class);
+		Transaction transaction1 = (Transaction) res.getBody();
+		System.out.println(res.getStatusCodeValue());
+		return "redirect:/getAccountlist";
+	}
+
+	@GetMapping("/withdraw")
+	public String withdrawAccount(@RequestParam("accnum") long accNumber, @RequestParam("amount") double amount,
+			Model model, HttpSession session) {
+
+		restTemplate.getForObject("http://localhost:8094/accountService/withdraw/" + accNumber + "/" + amount,
+				Account.class);
+
+		Transaction transaction = new Transaction();
+		transaction.setTranAmount(amount);
+		transaction.setTranType("Withdraw");
+		transaction.setTranToAccount(accNumber);
+		transaction.setTranFromAccount(accNumber);
+
+		ResponseEntity<Transaction> res = restTemplate.postForEntity(
+				"http://localhost:8096/transactionService/createTransaction", transaction, Transaction.class);
+		Transaction transaction1 = (Transaction) res.getBody();
+		System.out.println(res.getStatusCodeValue());
+		return "redirect:/getAccountlist";
+	}
+
+	@GetMapping("/fundtransfer")
+	public String FundTransferAccount(@RequestParam("fromaccnum") long fromAccNumber,
+			@RequestParam("toaccnum") long toAccNumber, @RequestParam("amount") double amount, Model model,
+			HttpSession session) {
+
+		restTemplate.getForObject(
+				"http://localhost:8094/accountService/fundtransfer/" + fromAccNumber + "/" + toAccNumber + "/" + amount,
+				Account.class);
+
+		Transaction transaction = new Transaction();
+		transaction.setTranAmount(amount);
+		transaction.setTranType("Fund Transfer");
+		transaction.setTranToAccount(toAccNumber);
+		transaction.setTranFromAccount(fromAccNumber);
+
+		ResponseEntity<Transaction> res = restTemplate.postForEntity(
+				"http://localhost:8096/transactionService/createTransaction", transaction, Transaction.class);
+		Transaction transaction1 = (Transaction) res.getBody();
+		System.out.println(res.getStatusCodeValue());
+		return "redirect:/getAccountlist";
+	}
+
+	// **************************************************************************
+
+	@GetMapping("/getalltransaction")
+	public String getTransaction(HttpSession session) {
+		TransactionDTO dto = restTemplate.getForObject("http://localhost:8096/transactionService/getalltransaction",
+				TransactionDTO.class);
+		// model.addAttribute("ProductList",dto.getList());
+		session.setAttribute("TransactionList", dto.getList());
+		return "transactionList";
+	}
+
+	@GetMapping("/createTransaction")
+	public String showCreateTransactionPage(Model model) {
+		model.addAttribute("transaction", new Transaction());
+		return "createTransaction";
+	}
+
+	@PostMapping("/createTransaction")
+	public String createTransaction(@RequestParam("tranFromAccount") long tranFromAccount,
+			@RequestParam("tranToAccount") long tranToAccount, @RequestParam("tranAmount") double tranAmount,
+			@RequestParam("tranTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") Date tranTime,
+			@RequestParam("tranType") String tranType, Model model,
+			HttpSession session) {
+
+		Transaction trans = new Transaction();
+		trans.setTranId(0);
+		trans.setTranFromAccount(tranFromAccount);
+		trans.setTranToAccount(tranToAccount);
+		trans.setTranAmount(tranAmount);
+		trans.setTranTime(tranTime);
+		trans.setTranType(tranType);
+
+		int status;
+		try {
+
+			ResponseEntity<Transaction> res = restTemplate.postForEntity(
+					"http://localhost:8096/transactionService/createTransaction", trans, Transaction.class);
+			Transaction transaction = (Transaction) res.getBody();
+			System.out.println(transaction);
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getalltransaction";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "home";
+		}
+
+	}
+
+	@PostMapping("/updateTransaction")
+	public String updateTransaction(@RequestParam("tranId") int tranId,
+			@RequestParam("tranFromAccount") long tranFromAccount, @RequestParam("tranToAccount") long tranToAccount,
+			@RequestParam("tranAmount") double tranAmount,
+			@RequestParam("tranTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") Date tranTime,
+			@RequestParam("tranType") String tranType, Model model,
+			HttpSession session) {
+
+		Transaction trans = new Transaction();
+		trans.setTranId(tranId);
+		trans.setTranFromAccount(tranFromAccount);
+		trans.setTranToAccount(tranToAccount);
+		trans.setTranAmount(tranAmount);
+		trans.setTranTime(tranTime);
+		trans.setTranType(tranType);
+
+		int status;
+		try {
+
+			ResponseEntity<Transaction> res = restTemplate.postForEntity(
+					"http://localhost:8096/transactionService/updateTransaction", trans, Transaction.class);
+			Transaction transaction = (Transaction) res.getBody();
+			System.out.println(transaction);
+			System.out.println(res.getStatusCodeValue());
+			return "redirect:/getalltransaction";
+		} catch (Exception e) {
+			status = 400;
+			model.addAttribute("message", "UserName and Password invalid" + e);
+
+			return "home";
+		}
+
+	}
+
+	@GetMapping("/deleteTransaction/{tranid}")
+	public String deleteTransaction(@PathVariable("tranid") int tranId) {
+		restTemplate.delete("http://localhost:8096/transactionService/deleteTransaction/" + tranId);
+		return "redirect:/getalltransaction";
+	}
+
+}
